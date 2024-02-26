@@ -12,33 +12,63 @@ Definitions:
 # Static
 face_values = (1, 2, 3, 4, 5, 5)
 n_dice = 8
-min_tile = 21
-max_tile = 36
-# states = pickle_in('states.pkl')
+tile_values = {
+    21: 1, 22: 1, 23: 1, 24: 1, 25: 2, 26: 2, 27: 2, 28: 2,
+    29: 3, 30: 3, 31: 3, 32: 3, 33: 4, 34: 4, 35: 4, 36: 4,
+}
+
 
 
 def dict_sum(dict1: dict, dict2: dict) -> dict:
-    # Adds the values of dict2 to dict1
+    """
+    Sum two dictionaries by adding values from dict2 to dict1, if present, and
+    adding key-value pairs from dict2 to dict1 if the keys were not present.
+
+    :param dict1: The first dictionary.
+    :param dict2: The second dictionary.
+    :return: A new dictionary with the combined key-value pairs.
+    """
+    # Adds the values of dict2 to dict1, if present in both
     dict1.update({k: min(v + dict2[k], 1) for k, v in dict1.items() if k in dict2})
+    # Adds the keys of dict 2, along with values, to dict 1.
     dict1.update({k: v for k, v in dict2.items() if k not in dict1})
     return dict1
 
 
 def dict_div(dict1: dict, denominator: int) -> dict:
-    # Divides all values in a dictionary by a denominator
-    return {k: v / denominator for k, v in dict1.items()}
+    """
+    Divide each value in the input dictionary by the specified denominator.
+
+    :param dict1: The dictionary whose values are to be divided.
+    :param denominator: The value to divide each dictionary value by.
+    :return: A new dictionary with the values divided by the denominator.
+    """
+    # Divide each value by the denominator
+    divided_dict = {k: v / denominator for k, v in dict1.items()}
+    return divided_dict
 
 
-def score_collection(col: np.ndarray) -> int:
-    # Calculates the value of the collection, zero if no worms
-    has_worms = col[-1] > 0
-    score = (col * face_values).sum()
+def count_score(collection: np.ndarray) -> int:
+    """
+    Count the score based on an array of die face frequencies.
+
+    :param collection: A numpy array representing the faces of the dice.
+    :return: The calculated score based on the given rules.
+    """
+    # Check if there is at least one worm
+    has_worms = collection[-1] > 0
+    # Multiply the frequency of each die face with its value
+    score = (collection * face_values).sum()
     return score if has_worms else 0
 
 
 def remaining_pickups(collection: np.ndarray) -> np.ndarray:
-    # Create an array of size [ N_ROLLS x N_DIE_FACES ]
+    """
+    Determine all possible pickups of dice faces that have not been collected.
 
+    :param collection: A numpy array representing the collection of dice faces.
+    :return: A numpy array representing the possible pickups.
+    """
     # Find face values that have not been collected yet
     free_faces = np.where(collection == 0)[0]
 
@@ -59,12 +89,40 @@ def remaining_pickups(collection: np.ndarray) -> np.ndarray:
     return np.concatenate(pickups)
 
 
-def work_tree(collection: np.ndarray) -> dict:
-    # Calculate the score of the current collection
-    score = score_collection(collection)
+def roll_dice(collection: np.ndarray) -> np.ndarray:
+    """
+    Simulate rolling the remaining dice.
+    Return the frequency of each rolled die face value.
 
-    # Set the chance for all tiles with value >= the current score to 100%
-    tile_chances = {t: 1.0 for t in range(min_tile, min(score + 1, max_tile + 1))}
+    :param collection: A numpy array representing the collection of dice faces.
+    :return: A numpy array of the frequency of each die face  after rolling.
+    """
+    # Get the number of dice left to roll
+    n_free_dice = n_dice - collection.sum()
+
+    if not n_free_dice:
+        raise ValueError('All dice have been collected. No dice left to roll.')
+
+    # Generate a list of random dice face outcomes
+    r_ints = np.random.randint(1, len(face_values) + 1, size=n_free_dice)
+
+    # Return the frequency of die face values
+    return np.array([(r_ints == i).sum() for i in range(1, len(face_values) + 1)])
+
+
+def probability_tree(collection: np.ndarray) -> dict:
+    """
+    Recursively calculate the probabilities associated with reaching each tile
+    value based on the current collection of dice faces.
+
+    :param collection: A numpy array representing the collection of dice faces.
+    :return: A dictionary mapping tile values to their probabilities.
+    """
+    # Calculate the score of the current collection
+    score = count_score(collection)
+
+    # Set the probability for all tiles with value >= the current score to 100%
+    tile_probs = {t: 1.0 for t in tile_values if score >= t}
 
     # Get the number of dice that can be rolled
     n_free_dice = n_dice - collection.sum()
@@ -74,7 +132,7 @@ def work_tree(collection: np.ndarray) -> dict:
 
     # Return if no die faces left to be collected OR if no dice left to roll
     if not n_free_faces or not n_free_dice:
-        return tile_chances
+        return tile_probs
 
     # List all possible outcomes of rolling the remaining dice
     outcomes = collection + remaining_pickups(collection)
@@ -82,27 +140,21 @@ def work_tree(collection: np.ndarray) -> dict:
     # Calculate the total number of possible outcomes
     n_outs = len(face_values) * n_free_dice
 
-    # Divide the chance of each outcome by the total number of possible
-    # outcomes. Sum all outcomes. dict_sum directly assigns to tile_chances.
-    [dict_sum(tile_chances, dict_div(work_tree(o), n_outs)) for o in outcomes]
-    return tile_chances
+    # Divide the probability of each outcome by the total number of possible
+    # outcomes. Sum all outcomes. dict_sum directly assigns to tile_probs.
+    [dict_sum(tile_probs, dict_div(probability_tree(o), n_outs)) for o in outcomes]
+    return tile_probs
 
 
-def roll_dice(collection: np.ndarray) -> np.ndarray:
-    # Get the number of dice left to roll
-    n_free_dice = n_dice - collection.sum()
+def analyze_turn(collection: np.array, roll: np.array) -> pd.DataFrame:
+    """
+    Analyze the possible outcomes of picking up dice from the current collection
+    based on the rolled dice faces.
 
-    if not n_free_dice:
-        raise ValueError('All dice have been collected. No dice left to roll.')
-
-    # Generate a list of random dice faces outcomes
-    r_ints = np.random.randint(1, len(face_values) + 1, size=n_free_dice)
-
-    # Return the frequency of die face values
-    return np.array([(r_ints == i).sum() for i in range(1, len(face_values) + 1)])
-
-
-def pickup_results(collection: np.array, roll: np.array) -> pd.DataFrame:
+    :param collection: A numpy array representing the current collection of dice faces.
+    :param roll: A numpy array representing the rolled dice faces.
+    :return: A pandas DataFrame containing the probabilities of each possible outcome.
+    """
     if roll.sum() + collection.sum() < n_dice:
         d = 'few dice' if n_dice - roll.sum() + collection.sum() > 1 else 'die'
         raise ValueError(f'You are missing a {d}. Look under the table.')
@@ -115,7 +167,7 @@ def pickup_results(collection: np.array, roll: np.array) -> pd.DataFrame:
     # - f_c: frequency in collection (should be 0 to be picked up)
     ops = [(idx, f_r) for idx, (f_r, f_c) in enumerate(zip(roll, collection)) if not f_c and f_r]
     if not any(ops):
-        return None
+        return pd.DataFrame(None)
 
     # Preallocate an array of all possible new collections
     new_coll = collection[np.newaxis, :].repeat(len(ops), 0)
@@ -127,21 +179,21 @@ def pickup_results(collection: np.array, roll: np.array) -> pd.DataFrame:
     # Extract face values from the options
     faces = map(lambda x: x[0] + 1, ops)
 
-    # Calculate the chance on outcomes of each pick up
-    chances = (work_tree(n_c) for n_c in new_coll)
+    # Calculate the probability on outcomes of each pick up
+    probs = (probability_tree(n_c) for n_c in new_coll)
 
-    # Concatenate the chances into one dataframe
+    # Concatenate the probs into one dataframe
     return pd.concat([pd.Series(
-        data=chance,
+        data=prob,
         name=face,
-        dtype=float) for chance, face in zip(chances, faces)],
+        dtype=float) for prob, face in zip(probs, faces)],
         axis=1)
 
 
 collection_state = np.zeros(len(face_values), dtype=int)
 dice_roll = roll_dice(collection_state)
 dice_roll = np.array((1, 1, 3, 1, 1, 1))
-df = pickup_results(collection_state, dice_roll)
+df = analyze_turn(collection_state, dice_roll)
 print('You rolled:', dice_roll)
 print(df.to_string(formatters={c: '{:,.0%}'.format for c in df.columns}))
 
@@ -154,7 +206,7 @@ print(df.to_string(formatters={c: '{:,.0%}'.format for c in df.columns}))
 # ax.set_title(dice_roll)
 # ax.set_ylabel('Score')
 # ax.set_xlabel('Die face')
-# fig.colorbar(h, label='Chance on score')
+# fig.colorbar(h, label='Probability of score')
 # fig.tight_layout()
 # fig.show()
 
