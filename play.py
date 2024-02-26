@@ -183,11 +183,21 @@ def analyze_turn(collection: np.array, roll: np.array) -> pd.DataFrame:
     probs = (probability_tree(n_c) for n_c in new_coll)
 
     # Concatenate the probs into one dataframe
-    return pd.concat([pd.Series(
-        data=prob,
-        name=face,
-        dtype=float) for prob, face in zip(probs, faces)],
-        axis=1)
+    probs_df = pd.concat(
+        objs=[pd.Series(data=tile_values, name='value', dtype=int)] + [pd.Series(
+            data=prob,
+            name=face,
+            dtype=float
+        ) for prob, face in zip(probs, faces)]
+        , axis=1,
+    )
+
+    # Give an existing index a name
+    probs_df.index.name = 'tile'
+
+    # Use the tile value as an index
+    probs_df = probs_df.set_index(['value'], append=True)
+    return probs_df
 
 
 collection_state = np.zeros(len(face_values), dtype=int)
