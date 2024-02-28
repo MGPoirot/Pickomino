@@ -117,7 +117,7 @@ def cartesian_product():
 
 n_faces = 6
 n_dice = 8
-f_name = Path('states.pkl')
+f_name = Path('states_old.pkl')
 
 if not f_name.is_file():
     pickle_out({}, f_name)
@@ -132,4 +132,31 @@ for collection in tqdm(collections):
 
 ######
 
+states_old = pickle_in('states_old.pkl')
+
+states_all = {k: np.stack([v for v in states_old[k] if np.sum(k) + v.sum() == 8]) for k, v in states_old.items()}
+for k, v in states_all.items():
+    if v.sum() == 0:
+        states_all[k] = None
+
+pickle_out(states_all, 'states_all.pkl')
+
+##
+
+states_valid = {}
+for k, v in states_all.items():
+    if v is None:
+        states_valid[k] = v
+        continue
+    mask = np.array(k) == 0
+    pickups = v * mask
+    states_valid[k] = pickups
+pickle_out(states_valid, 'states_valid.pkl')
+
+####
+
+# Store probabilities
+# for k in states:
+#     get_score_probabilities(np.array(k))
+# pickle_out(probabilities, probs_file)
 

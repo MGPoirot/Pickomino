@@ -1,4 +1,5 @@
 import pickle
+from pathlib import Path
 
 
 def flatten(lst: list) -> list:
@@ -21,12 +22,12 @@ def flatten(lst: list) -> list:
     return [item for sublist in lst for item in sublist]
 
 
-def pickle_in(source: str) -> dict:
+def pickle_in(source: str | Path) -> dict:
     with open(source, 'rb') as file:
         return pickle.load(file)
 
 
-def pickle_out(obj: dict, target: str):
+def pickle_out(obj: dict, target: str | Path):
     with open(target, 'wb') as file:
         pickle.dump(obj, file)
 
