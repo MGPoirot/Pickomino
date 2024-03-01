@@ -4,7 +4,7 @@
 #
 # """
 # Definitions:
-# - Collection: dice that have been picked up
+# - Dice: dice that have been picked up
 # - Free dice: the number of dice not in the collection
 # - Free face: a die face not present in the collection
 # """

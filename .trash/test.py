@@ -1,5 +1,5 @@
 from scipy.stats import norm
-from play import roll_dice, analyze_turn, count_score, n_dice, get_score_probabilities, get_best_probs
+from dice import roll_dice, present_roll_options, count_score, n_dice, get_turn_probabilities, get_roll_probabilities
 import numpy as np
 from utils import pickle_in, pickle_out
 import numpy as np
@@ -17,4 +17,4 @@ rolls = states[tuple(collection)]
 for pickups in rolls:
     if np.count_nonzero(pickups) > 4:
         xx
-    get_best_probs(collection, pickups)
+    get_roll_probabilities(collection, pickups)
