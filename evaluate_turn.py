@@ -1,14 +1,14 @@
-from utils import pickle_in, pickle_out, Dice, Tiles
+from utils import pickle_in, pickle_out, Dice, Tiles, json_out, json_in
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from itertools import product
 from collections import Counter
-
+from typing import Callable
 
 def get_roll_probabilities(dice: Dice, pickups: np.array) -> pd.DataFrame:
     """
-    Calculate the probabilities of achieving a score based for a die roll outcome.
+
 
     :param dice: A Dice object representing the current dice of dice faces.
     :param pickups: A numpy array representing the pickup options for each face.
@@ -64,6 +64,7 @@ def get_turn_probabilities(dice: Dice) -> pd.Series:
     Calculate the probabilities of achieving tile scores for a turn.
     The turn includes the option to quit or continue rolling dice.
 
+    :param compare:
     :param dice:
     :return:
     """
@@ -72,7 +73,7 @@ def get_turn_probabilities(dice: Dice) -> pd.Series:
         return probabilities[dice.key]
 
     # Tiles with a value <= the score can be obtained with 100% certainty
-    score_probs = pd.Series({t: 1.0 for t in Tiles.values if dice.score >= t})
+    score_probs = pd.Series({t: 1.0 for t in Tiles.values if compare(dice.score, t)})
 
     # If we cannot roll or collect dice we are left with our current score
     if not dice.free_dice or not dice.free_faces:
@@ -81,8 +82,10 @@ def get_turn_probabilities(dice: Dice) -> pd.Series:
 
     # Get the probabilities of rolling dice
     roll_probs = get_rolling_probabilities(dice)
-    roll_probs.update(score_probs)
-    score_probs = roll_probs
+    if any(score_probs):
+        score_probs = score_probs.combine_first(roll_probs)
+    else:
+        score_probs = roll_probs
 
     # Set and return the value
     probabilities[dice.key] = score_probs
@@ -105,7 +108,7 @@ def present_roll_options(dice: Dice, roll: np.array) -> pd.DataFrame:
         raise ValueError('You are using too many dice!')
 
     # List the pickup options: each die face we can pick up with its frequency:
-    # - idx: index
+    # - tile_idx: index
     # - f_r: frequency in roll (should be > 0 to be picked up)
     # - f_c: frequency in dice (should be 0 to be picked up)
     ops = [(idx, f_r) for idx, (f_r, f_c) in enumerate(zip(roll, dice)) if not f_c and f_r]
@@ -143,21 +146,34 @@ def present_roll_options(dice: Dice, roll: np.array) -> pd.DataFrame:
     return probs_df
 
 
-def initialize():
+def initialize() -> None:
     # Calculate all probabilities and save
     get_turn_probabilities(Dice())
-    pickle_out(probabilities, probs_file)
 
 
-# Load the probabilities file
-probs_file = Path('probabilities.pkl')
-if not probs_file.is_file():
-    pickle_out({}, probs_file)
-probabilities = pickle_in(probs_file)
-
+tasks = {
+    'minimal': lambda x, y: x >= y,
+    'exactly': lambda x, y: x == y,
+}
 
 if __name__ == '__main__':
-    if not any(probabilities):
-        print('Initializing probabilities file')
-        initialize()
+    for task_name, compare in tasks.items():
+        # Load the probabilities file
+        probs_file = Path(f'{task_name}.pkl')
+        if not probs_file.is_file():
+            pickle_out({}, probs_file)
+        probabilities = pickle_in(probs_file)
 
+        if not any(probabilities):
+            print(f'Initializing {task_name} file')
+            initialize()
+        pickle_out(probabilities, probs_file)
+
+        json_probas = {}
+        for state, v in probabilities.items():
+            # Empty probability values are redundant
+            if not len(v):
+                continue
+            # Round the probability values to whole percentages
+            json_probas[''.join(map(str, state))] = {k: round(vv * 100, 1) for k, vv in v.items()}
+        json_out(json_probas, f'{task_name}.json')

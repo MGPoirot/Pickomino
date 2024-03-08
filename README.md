@@ -9,9 +9,24 @@
 
 * `values` are only <u>valid</u> pick ups. This is a pruned version of all roll. For example when the collection is (0, 0, 4, 4, 0, 0), an invalid pickup would be (0, 0, 2, 0, 0, 0).
 
+
+
+# Dice rolling in Pickomino
+
+**Rules:** Each turn players roll their dice and set aside all those matching any single value. The remaining dice are rolled and any value is set aside again until the player stops and takes a tile or busts and puts their last tile back. When a player busts and fails to take a tile they must also turn the highest tile face-down.
+Players
+
+**Implementation:** `dice.py` calculates the probabilities of rolling dice in the game Pickomino.
+
+# Code Definitions
+
+
+
 # pickomino-rl
 
 Reinforcement learning pickomino bot
+
+
 
 # Previously
 

@@ -48,7 +48,7 @@ def mk_tmp(target: str | Path, exist_ok=False):
 
 class Dice(np.ndarray):
     """
-    Represents a dice of die face frequencies.
+    Represents a collection of die face frequencies.
     An example for eight dice with six faces is: (0, 0, 3, 4, 0, 1)
     This example means that three threes, four fours and one worm die face have been collected.
     """
@@ -146,7 +146,7 @@ class Dice(np.ndarray):
 
 class Tiles(np.ndarray):
     """
-    Represents a dice of die face frequencies.
+    Represents a collection of die face frequencies.
     An example for eight dice with six faces is: (0, 0, 3, 4, 0, 1)
     This example means that three threes, four fours and one worm die face have been collected.
     """
@@ -158,6 +158,8 @@ class Tiles(np.ndarray):
 
     n_tiles = len(values)
 
+    def __contains__(self, tile: int):
+        return bool(self[tile - min(self.values.keys())])
 
     def __new__(cls, state: tuple | list | np.ndarray | None = None):
         if state is None:
@@ -174,6 +176,14 @@ class Tiles(np.ndarray):
 
         return state.view(Tiles)
 
+    def is_available(self, tile: int):
+        return self[tile - min(self.values.keys())]
+
+    def pop(self, tile):
+        if self[tile - min(self.values.keys())] == 0:
+            raise ValueError('Cannot pop popped tile!')
+        self[tile - min(self.values.keys())] = 0
+        return tile
 
     @property
     def key(self):
@@ -200,21 +210,25 @@ class Tiles(np.ndarray):
         """
         return bool(self.n_free_tiles)
 
-    @property
-    def score(self) -> int:
-        """
-        Count the score based on an array of die face frequencies.
-        :return: The calculated score based on the given rules.
-        """
-        # Check if there is at least one worm
-        has_worms = self[-1] > 0
-        # Multiply the frequency of each die face with its value
-        score = (self * tuple(self.values.values())).sum()
-        return int(score if has_worms else 0)
+    def gain(self, tile: int) -> None:
+        self[tile - min(self.values.keys())] = 1
+
+    def lose(self, tile: int) -> None:
+        self[tile - min(self.values.keys())] = 0
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return 'Tiles:       ' + ' '.join([f'|{t}|' if k else '    ' for t, k in zip(self.values, self)]) + '\n' \
+               '             ' + ' '.join([f'| {s}|' if k else ' __ ' for (_, s), k in zip(self.values.items(), self)])
 
 
 class Player(list):
-    def __init__(self, state: tuple | list | np.ndarray | None = None, name: str | None = None):
+    def __init__(self,
+                 state: tuple | list | np.ndarray | None = None,
+                 name: str | None = None,
+                 params: dict | None = None):
         super().__init__()
         if state is None:
             state = []
@@ -229,6 +243,15 @@ class Player(list):
         self.name = names.pop(0) if name is None else name
         players.append(self)
 
+        self.params = {}
+        if params is not None:
+            self.params = params
+            for kv in params.items():
+                self.__setattr__(*kv)
+
+    def reset(self):
+        self.clear()
+
     @property
     def score(self) -> int:
         return int(np.sum([Tiles.values[t] for t in self]))
@@ -237,12 +260,11 @@ class Player(list):
     def position(self) -> int:
         return self.score - np.max([p.score for p in players if p is not self])
 
-    def lose(self, tile: int) -> None:
-        self.remove(tile)
+    def __repr__(self):
+        return str(self)
 
-    def gain(self, tile: int) -> None:
-        self.append(tile)
-        self.sort()
+    def __str__(self):
+        return f'{self.name} {" ".join([f"[{t}]" for t in self])}'
 
 
 def json_in(source: Path | str):
