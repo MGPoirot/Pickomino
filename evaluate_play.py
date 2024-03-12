@@ -7,7 +7,7 @@ import pandas as pd
 probabilities = pickle_in('minimal.pkl')
 steal = pickle_in('exactly.pkl')
 n_competitors = 7
-n_games = 10000
+n_games = 1
 do_steal = True
 players = [Player() for _ in range(n_competitors)]
 
@@ -106,7 +106,7 @@ for game_n in range(n_games):
                             appeal = pd.concat([i for i in (appeal, steal_appeal) if any(i)])
                         elif not any(appeal):
                             continue
-                        # Do not optimize probabilities for tiles that we already have
+                        # Do not optimize probabilities for tiles_p that we already have
                         new_appeal = pd.Series({k: v for k, v in appeal.items() if int(str(k).replace('S', '')) > dice.score })
                         if any(new_appeal):
                             best_tile = new_appeal.index[np.argmax(new_appeal)]
@@ -250,28 +250,28 @@ for i,j in zip([target_indices,
     np.sum(arr == 0, 0)/n_games,
     np.sum(arr == 2, 0)/n_games,], ['Game Duration', 'Pick', 'Lose', 'Steal']): print(f'{j}, ' + ', '.join(map(str, i)))
 
-#
-# fig, ax = plt.subplots()
-# plt.stackplot(
-#     target_indices,
-#     np.sum(arr == 1, 0),
-#     np.sum(arr == 0, 0),
-#     np.sum(arr == 2, 0),
-#     labels=['Game Duration', 'Pick', 'Lose', 'Steal']
-# )
-# ax.set_xlim(0, 100)
-# ax.set_ylim(0, 100)
-# ax.yaxis.set_major_formatter(mtick.PercentFormatter())
-# ax.xaxis.set_major_formatter(mtick.PercentFormatter())
-# ax.set_xlabel('Game completion')
-# ax.set_ylabel('Share of turns')
-# ax.set_title(f'Share of turn outcomes for a {n_games} games with {n_competitors} players')
-# fig.legend(loc='lower left')
-# fig.show()
-#
-# fig, ax = plt.subplots()
-# ax.imshow(arr)
-# ax.set_aspect(10)
-# fig.tight_layout()
-# fig.show()
-# # Now resampled_lists contains lists of length 100
+
+fig, ax = plt.subplots()
+plt.stackplot(
+    target_indices,
+    np.sum(arr == 1, 0),
+    np.sum(arr == 0, 0),
+    np.sum(arr == 2, 0),
+    labels=['Game Duration', 'Pick', 'Lose', 'Steal']
+)
+ax.set_xlim(0, 100)
+ax.set_ylim(0, 100)
+ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+ax.xaxis.set_major_formatter(mtick.PercentFormatter())
+ax.set_xlabel('Game completion')
+ax.set_ylabel('Share of turns')
+ax.set_title(f'Share of turn outcomes for a {n_games} games with {n_players} players')
+fig.legend(loc='lower left')
+fig.show()
+
+fig, ax = plt.subplots()
+ax.imshow(arr)
+ax.set_aspect(10)
+fig.tight_layout()
+fig.show()
+# Now resampled_lists contains lists of length 100

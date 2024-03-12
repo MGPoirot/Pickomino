@@ -48,7 +48,7 @@ def get_rolling_probabilities(dice: Dice) -> pd.Series:
     for pickups, p in Counter(possible_frequencies).items():
         # This is all ways the dice could land, minus the dice we cannot pick up
         valid_pickups = collection_mask * pickups
-        # Get the best outcome for different target tiles
+        # Get the best outcome for different target tiles_p
         best_roll_outcome = get_roll_probabilities(dice, valid_pickups)
         # We add the outcome of this situation to a list of all situations
         best_prob_per_pickup.append(best_roll_outcome * p / len(possible_rolls))

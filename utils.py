@@ -4,10 +4,6 @@ import numpy as np
 import json
 import os
 
-names = ['Alice', 'Bob', 'Charlie', 'Dave', 'Eve', 'Frank', 'Grace']
-
-players = []
-
 
 def flatten(lst: list) -> list:
     """
@@ -179,10 +175,12 @@ class Tiles(np.ndarray):
     def is_available(self, tile: int):
         return self[tile - min(self.values.keys())]
 
-    def pop(self, tile):
+    def transfer(self, tile: int | str):
+        if isinstance(tile, str):
+            tile = int(tile[1:])
         if self[tile - min(self.values.keys())] == 0:
-            raise ValueError('Cannot pop popped tile!')
-        self[tile - min(self.values.keys())] = 0
+            raise ValueError('Cannot transfer missing tile!')
+        self.lose(tile)
         return tile
 
     @property
@@ -196,8 +194,8 @@ class Tiles(np.ndarray):
     @property
     def n_free_tiles(self) -> int:
         """
-        Calculate the number of free tiles remaining.
-        :return: The number of free tiles remaining.
+        Calculate the number of free tiles_p remaining.
+        :return: The number of free tiles_p remaining.
         """
         return int(self.sum())
 
@@ -205,31 +203,60 @@ class Tiles(np.ndarray):
     @property
     def free_tiles(self) -> bool:
         """
-        Check if there are free tiles remaining.
-        :return: True if there are free tiles remaining, False otherwise.
+        Check if there are free tiles_p remaining.
+        :return: True if there are free tiles_p remaining, False otherwise.
         """
         return bool(self.n_free_tiles)
 
-    def gain(self, tile: int) -> None:
+    def gain(self, tile: int | str) -> None:
+        if isinstance(tile, str):
+            tile = int(tile[1:])
         self[tile - min(self.values.keys())] = 1
 
-    def lose(self, tile: int) -> None:
+    def lose(self, tile: int | str) -> None:
+        if isinstance(tile, str):
+            tile = int(tile[1:])
         self[tile - min(self.values.keys())] = 0
 
     def __repr__(self):
         return str(self)
 
     def __str__(self):
-        return 'Tiles:       ' + ' '.join([f'|{t}|' if k else '    ' for t, k in zip(self.values, self)]) + '\n' \
-               '             ' + ' '.join([f'| {s}|' if k else ' __ ' for (_, s), k in zip(self.values.items(), self)])
+        return 'Tiles:           ' + ' '.join([f'|{t}|' if k else '    ' for t, k in zip(self.values, self)]) + '\n' \
+               '                 ' + ' '.join([f'| {s}|' if k else ' __ ' for (_, s), k in zip(self.values.items(), self)])
+
+
+def log(key, *values, i=1):
+    if any(key):
+        sep = ':'
+    else:
+        sep = ' '
+    print(f'{" " * 4 * i}{key}{sep}'.ljust(16), *values)
+
+
+class Players(list):
+    def __init__(self, params):
+        super().__init__()
+        self.names = []
+        for param in params:
+            state = None if 'state' not in param else param.pop('state')
+            name = self.name() if 'name' not in param else param.pop('name')
+            self.append(Player(self, state, name, params=param))
+
+    def name(self, index=-1):
+        if len(self) == 0:
+            self.names.extend(['Grace', 'Frank', 'Eve', 'Dave', 'Charlie', 'Bob', 'Alice'])
+        return self.names.pop(index)
 
 
 class Player(list):
     def __init__(self,
+                 parent,
                  state: tuple | list | np.ndarray | None = None,
                  name: str | None = None,
                  params: dict | None = None):
         super().__init__()
+
         if state is None:
             state = []
         elif isinstance(state, tuple | np.ndarray):
@@ -238,16 +265,27 @@ class Player(list):
             raise TypeError('Player state is not of type tuple | list | np.ndarray')
 
         if len(state) > Tiles.n_tiles:
-            raise ValueError(f'A player possesses more tiles than available in the game')
+            raise ValueError(f'A player possesses more tiles_p than available in the game')
 
-        self.name = names.pop(0) if name is None else name
-        players.append(self)
+        self.parent = parent
+        self.name = self.parent.name() if name is None else name
 
         self.params = {}
         if params is not None:
             self.params = params
             for kv in params.items():
                 self.__setattr__(*kv)
+
+    def __call__(self, param, fallback):
+        if hasattr(self, param):
+            return getattr(self, param)
+        else:
+            return fallback
+
+    def transfer(self, tile: int | str):
+        if isinstance(tile, str):
+            tile = int(tile[1:])
+        return self.pop(self.index(tile))
 
     def reset(self):
         self.clear()
@@ -258,13 +296,13 @@ class Player(list):
 
     @property
     def position(self) -> int:
-        return self.score - np.max([p.score for p in players if p is not self])
+        return self.score - np.max([p.score for p in self.parent if p is not self])
 
     def __repr__(self):
         return str(self)
 
     def __str__(self):
-        return f'{self.name} {" ".join([f"[{t}]" for t in self])}'
+        return f'{self.name} {self.params} {" ".join([f"[{t}]" for t in self])}'
 
 
 def json_in(source: Path | str):
