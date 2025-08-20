@@ -1,4 +1,4 @@
-# pickomino-rl
+# Pickomino
 
 **Optimal play, simulation, and visualizations for _Pickomino_ (a.k.a. _Heckmeck_).**  
 This repo contains:
