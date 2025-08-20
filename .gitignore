@@ -1,2 +1,5 @@
 .trash
 .idea
+__pycache__
+verification_of_precalculated_chances/single_run_outcomes/validation_of_risk/*
+verification_of_precalculated_chances/single_run_outcomes/validation_of_score/*
