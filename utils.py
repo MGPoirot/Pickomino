@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import json
 import os
+from typing import List
 
 
 def flatten(lst: list) -> list:
@@ -199,7 +200,6 @@ class Tiles(np.ndarray):
         """
         return int(self.sum())
 
-
     @property
     def free_tiles(self) -> bool:
         """
@@ -235,16 +235,21 @@ def log(key, *values, i=1):
 
 
 class Players(list):
-    def __init__(self, params):
+    def __init__(self, params: List[dict] | None = None, n: int | None = None):
         super().__init__()
+        if params is None:
+            params = [{}] * n
+        elif n is not None:
+            raise ValueError('Argument "n" does nothing when a list of params is given.')
+
         self.names = []
         for param in params:
             state = None if 'state' not in param else param.pop('state')
-            name = self.name() if 'name' not in param else param.pop('name')
+            name = self.name() if 'name' not in param else param.pop('name').capitalize()
             self.append(Player(self, state, name, params=param))
 
     def name(self, index=-1):
-        if len(self) == 0:
+        if len(self.names) == 0:
             self.names.extend(['Grace', 'Frank', 'Eve', 'Dave', 'Charlie', 'Bob', 'Alice'])
         return self.names.pop(index)
 

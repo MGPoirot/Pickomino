@@ -1,6 +1,6 @@
 from utils import json_in, json_out, Tiles, Dice
 from scipy.stats import norm
-from evaluate_turn import present_roll_options, get_turn_probabilities
+from precalculate_turn_chances import present_roll_options, get_turn_probabilities
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -56,7 +56,7 @@ def collect_simulation_results(target_score, evals=10_000, alpha=0.05):
 
     expectation = get_turn_probabilities(start_arr).loc[target_score]
 
-    f_name = Path('sim') / f'collected-tiles_evals-{evals}_target-score_{target_score}.json'
+    f_name = Path('') / f'collected-tiles_evals-{evals}_target-score_{target_score}.json'
     if not f_name.is_file():
         run_simulation(f_name, evals, start_arr, target_score)
     tiles_collected = json_in(f_name)

@@ -1,5 +1,5 @@
 from utils import json_in, json_out
-from evaluate_turn import present_roll_options, get_turn_probabilities, Dice, Tiles
+from precalculate_turn_chances import present_roll_options, get_turn_probabilities, Dice, Tiles
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -63,7 +63,7 @@ def collect_simulation_results(risk, evals=10_000):
     min_chance = 1 - risk
 
     start_arr = np.array((0, 0, 0, 0, 0, 0)).view(Dice)
-    f_name = Path('sim') / f'collected-tiles_evals-{evals}_target-risk_{risk:.2f}.json'
+    f_name = Path('') / f'collected-tiles_evals-{evals}_target-risk_{risk:.2f}.json'
     # if not f_name.is_file():
     #    run_simulation(f_name, evals, start_arr, min_chance)
     tiles_collected = json_in(f_name)

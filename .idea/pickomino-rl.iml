@@ -3,8 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.trash" />
+      <excludeFolder url="file://$MODULE_DIR$/verification_of_precalculated_chances/single_run_outcomes" />
     </content>
-    <orderEntry type="jdk" jdkName="EMBARC" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="VeyeLabEnv Local" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

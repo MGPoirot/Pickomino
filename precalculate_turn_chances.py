@@ -4,15 +4,34 @@ import pandas as pd
 from pathlib import Path
 from itertools import product
 from collections import Counter
-from typing import Callable
+
 
 def get_roll_probabilities(dice: Dice, pickups: np.array) -> pd.DataFrame:
     """
+    Compute the *best achievable* tile-win probabilities for a single roll outcome.
 
+    Given the current `dice` state and a vector `pickups` (length = n_faces) indicating how many dice
+    of each face were rolled (and thus are eligible to be picked), this function enumerates all legal
+    single-face pickup choices and evaluates the downstream turn probabilities for each resulting state.
+    It returns, per tile, the maximum probability across those choices (i.e., optimal play).
 
-    :param dice: A Dice object representing the current dice of dice faces.
-    :param pickups: A numpy array representing the pickup options for each face.
-    :return: A pandas DataFrame containing the probabilities of achieving each score for each pickup scenario.
+    Parameters
+    ----------
+    dice : Dice
+        The current dice collection/state. Must be numpy-like and indexable per face.
+    pickups : np.array
+        Length-n_faces array of counts indicating how many dice of each face are available to pick.
+
+    Returns
+    -------
+    pd.Series
+        A Series indexed by tile value giving, for each tile, the highest probability of being able
+        to claim it after making the best pickup choice for this roll outcome.
+
+    Notes
+    -----
+    - Internally, this calls `get_turn_probabilities` on each candidate post-pickup state, stacks
+      the resulting Series into a DataFrame, and takes the column-wise max to keep the optimal choice.
     """
     # Create a new dice for each situation
     new_collections = np.repeat(dice[np.newaxis, :], np.count_nonzero(pickups), 0)
@@ -30,13 +49,31 @@ def get_roll_probabilities(dice: Dice, pickups: np.array) -> pd.DataFrame:
 
 def get_rolling_probabilities(dice: Dice) -> pd.Series:
     """
-    Calculate the probabilities of achieving tile scores for the rolling of dice.
-    The rolling of dice includes all possible outcomes from rolling the dice that have not been collected.
+    Aggregate tile-win probabilities over all possible outcomes of rolling the free dice.
 
-    :param dice:
-    :return:
+    For the current state, enumerate all permutations of rolling `dice.n_free_dice` dice with
+    `dice.n_faces` sides. Group permutations into frequency histograms to avoid recomputation,
+    evaluate the best post-pickup outcome for each histogram, weight by multiplicity, and sum.
+
+    Parameters
+    ----------
+    dice : Dice
+        The current dice collection/state.
+
+    Returns
+    -------
+    pd.Series
+        A Series indexed by tile value with probabilities for achieving each tile *after* rolling,
+        assuming optimal pickup strategy from the roll outcome onward.
+
+    Implementation details
+    ----------------------
+    - `product(range(1, n_faces+1), repeat=n_free_dice)` enumerates permutations.
+    - A histogram of face counts (tuple of length n_faces) represents an equivalence class.
+    - Multiplicity is tracked by `Counter`; contributions are weighted by count / total permutations.
+    - Illegal pickups (faces already collected) are masked out by `(dice == 0)`.
     """
-    # Retrieve all ways the dice can land and be picked up
+    # Retrieve all posisble ways the dice can land and be picked up
     possible_rolls = list(product(range(1, dice.n_faces + 1), repeat=dice.n_free_dice))
 
     # Retrieve the best probabilities that can be achieved in all situations.
@@ -61,12 +98,28 @@ def get_rolling_probabilities(dice: Dice) -> pd.Series:
 
 def get_turn_probabilities(dice: Dice) -> pd.Series:
     """
-    Calculate the probabilities of achieving tile scores for a turn.
-    The turn includes the option to quit or continue rolling dice.
+    Return optimal tile-win probabilities from the given `dice` state for the current rule.
 
-    :param compare:
-    :param dice:
-    :return:
+    The result is memoized under `probabilities[dice.key]`. If the state has no legal continuation
+    (no free dice to roll or no free faces to pick), the probability mass collapses to tiles whose
+    value satisfies the current rule `compare(dice.score, tile)`.
+
+    Parameters
+    ----------
+    dice : Dice
+        The current dice collection/state.
+
+    Returns
+    -------
+    pd.Series
+        Series mapping tile value -> probability of being able to claim the tile by the end of the turn.
+
+    Relies on
+    ---------
+    probabilities : Dict[hashable, pd.Series]
+        Module-global memoization cache.
+    compare : Callable[[int, int], bool]
+        Module-global rule predicate: compare(current_score, tile_value) -> bool.
     """
     # Define serializable key to store and retrieve probabilities
     if dice.key in probabilities:
@@ -94,12 +147,28 @@ def get_turn_probabilities(dice: Dice) -> pd.Series:
 
 def present_roll_options(dice: Dice, roll: np.array) -> pd.DataFrame:
     """
-    Analyze the possible outcomes of picking up dice from the current dice
-    based on the rolled dice faces.
+    Given a concrete roll (as face frequencies), evaluate outcomes for each legal single-face pickup.
 
-    :param dice: A numpy array representing the current dice of dice faces.
-    :param roll: A numpy array representing the rolled dice faces.
-    :return: A pandas DataFrame containing the probabilities of each possible outcome.
+    This is a helper for UI/debugging: for a specific roll, it shows the probability of eventually
+    claiming each tile if you pick each eligible face.
+
+    Parameters
+    ----------
+    dice : Dice
+        Current state before picking from this roll.
+    roll : np.array
+        Length-n_faces vector with the number of dice rolled for each face.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame indexed by (tile, value). Each column corresponds to a pickup option named
+        like "face (count)". Cell values are probabilities in [0, 1].
+
+    Raises
+    ------
+    ValueError
+        If `roll` is inconsistent with `dice` (too few or too many dice).
     """
     if roll.sum() + dice.sum() < dice.n_dice:
         d = 'few dice' if dice.n_dice - roll.sum() + dice.sum() > 1 else 'die'
@@ -147,7 +216,10 @@ def present_roll_options(dice: Dice, roll: np.array) -> pd.DataFrame:
 
 
 def initialize() -> None:
-    # Calculate all probabilities and save
+    """
+    Seed the memoization table by exploring from the default starting state `Dice()`.
+    Safe to call multiple times; it reuses the global `probabilities` cache.
+    """
     get_turn_probabilities(Dice())
 
 
@@ -157,9 +229,23 @@ tasks = {
 }
 
 if __name__ == '__main__':
+    """
+    Compute and export precomputed probabilities for each rule in `tasks`.
+
+    For each task:
+      1) Load (or create) the memo cache file at precalculated_chances/<task>.pkl
+      2) Set module-globals `probabilities` (dict) and `compare` (callable) for this run
+      3) If the cache is empty, initialize from the starting state
+      4) Persist the pickle, and emit a compact JSON with percentages
+
+    Files written
+    -------------
+    - precalculated_chances/<task>.pkl : full memoization dictionary
+    - <task>.json : {"STATEKEY": {"tile": percent, ...}, ...}
+    """
     for task_name, compare in tasks.items():
         # Load the probabilities file
-        probs_file = Path(f'{task_name}.pkl')
+        probs_file = Path(f'precalculated_chances/{task_name}.pkl')
         if not probs_file.is_file():
             pickle_out({}, probs_file)
         probabilities = pickle_in(probs_file)
@@ -169,11 +255,11 @@ if __name__ == '__main__':
             initialize()
         pickle_out(probabilities, probs_file)
 
-        json_probas = {}
+        json_probabilities = {}
         for state, v in probabilities.items():
             # Empty probability values are redundant
             if not len(v):
                 continue
             # Round the probability values to whole percentages
-            json_probas[''.join(map(str, state))] = {k: round(vv * 100, 1) for k, vv in v.items()}
-        json_out(json_probas, f'{task_name}.json')
+            json_probabilities[''.join(map(str, state))] = {k: round(vv * 100, 1) for k, vv in v.items()}
+        json_out(json_probabilities, f'precalculated_chances/{task_name}.json')

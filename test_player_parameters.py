@@ -8,6 +8,22 @@ np.random.seed(0)
 
 
 def break_turn(player, tiles):
+    """
+    Handle a player's failed turn (bust).
+
+    - If the player has collected tiles, they must return their last tile.
+    - That tile is returned to the central table (tiles).
+    - If the table is empty, flips the highest-value tile back first.
+
+    Args:
+        player (Player): The player whose turn has broken.
+        tiles (Tiles): The shared table of available tiles.
+
+    Returns:
+        tuple: (lost_tile: int | str, tile_worth: int | str)
+            - lost_tile: the numeric value of the tile the player lost, or '' if nothing to lose.
+            - tile_worth: the worm-value of that tile, or '' if none.
+    """
     # Check if the player has anything to lose
     if any(player):
         # Check if the table has any tiles to flip
@@ -24,6 +40,25 @@ def break_turn(player, tiles):
 
 
 def appeal_wrapper(tiles, players, player, multiplier=2):
+    """
+    Create an "appeal calculator" closure for evaluating dice collections.
+
+    The appeal quantifies how desirable a dice collection is, based on:
+      - Probability of acquiring tiles from the table.
+      - Probability of stealing tiles from opponents (if do_steal is enabled).
+      - Potential loss of the player's last tile.
+      - Configurable multiplier for weighting steals.
+
+    Args:
+        tiles (Tiles): The shared pool of available tiles.
+        players (List[Player]): All players in the game.
+        player (Player): The current player evaluating dice rolls.
+        multiplier (float, optional): Steal weighting multiplier. Default=2.
+
+    Returns:
+        Callable[[Dice], pd.Series]:
+            A function mapping a Dice state to a Series of appeals for each tile option.
+    """
     potential_loss = 0 if not any(player) else player[-1]
     if do_steal:
         tiles_s = {p[-1]: tiles.values[p[-1]] * multiplier + potential_loss for p in players if p is not player and any(p)}
@@ -46,6 +81,30 @@ def appeal_wrapper(tiles, players, player, multiplier=2):
 
 
 def play_game(players: List[Player], logger=log, multiplier=2.0):
+    """
+    Simulate a full game of Pickomino with the given players.
+
+    Flow:
+      - Initializes the tile stack and resets players.
+      - Loops until no free tiles remain.
+      - Each player rolls, collects dice, and evaluates possible tiles.
+      - Supports stealing if enabled (global `do_steal` flag).
+      - Uses appeal_wrapper to decide which dice to keep and when to stop.
+      - Handles busted and hopeless turns via break_turn().
+
+    Args:
+        players (List[Player]): A list of Player objects in turn order.
+        logger (callable, optional): Logging function. Defaults to `log`.
+        multiplier (float, optional): Default steal appeal multiplier. Defaults to 2.0.
+
+    Returns:
+        tuple:
+            - winner (int | None): Index of winning player, or None if tie.
+            - turn_outcomes (tuple): Sequence of encoded outcomes per turn:
+                0 = lost turn,
+                1 = picked tile,
+                2 = stole tile.
+    """
     # Set up the game
     tiles = Tiles()
     [player.reset() for player in players]
@@ -162,30 +221,42 @@ def play_game(players: List[Player], logger=log, multiplier=2.0):
         winner = None
     return winner, tuple(turn_outcomes)
 
+"""
+This test bed can be used to test player parameters against default players.
+It is currently built to test the 'stealing multiplier' player parameter, but others can be implemented.
+The script writes it findings to the 'csv_output_dir'.
+"""
 
 # Parameters
 n_games = 10_000
 do_steal = True
 verbose = False
+csv_output_dir = Path('play_results/single_run_outcomes')
+multiplier_values_to_test = [2.0, ]  # np.arange(1.0, 3.5, 0.5)
+
+"""
+Mult allows for the testing of different stealing multipliers, effectively increasing the chance a player will steal 
+relative to other players. The default is 2.0 (a tile stolen is worth twice the amount of worms of a tile picked up
+from the table. But this can be increased for more competitive play. However, I did not find that changing this 
+multiplier improved chances of winning compared to other players. I presume it just makes the player overestimate the
+success rate of getting a tile and failing more often.
+"""
 
 # Initialization
-minimal_probs = pickle_in('minimal.pkl')
-exact_probs = pickle_in('exactly.pkl')
+minimal_probs = pickle_in('precalculated_chances/minimal.pkl')
+exact_probs = pickle_in('precalculated_chances/exactly.pkl')
 log_method = log if verbose else lambda *args, i=None: True
 
-
-for mult in [2.0, ]:  # np.arange(1.0, 3.5, 0.5):
+for mult in multiplier_values_to_test:
     for n_players in [2, ]:  # range(2, 8):
         friends = Players([{'multiplier': mult}] + [{}] * (n_players - 1))
         df = pd.DataFrame(columns=['winner', 'turn_outcome'])
         df.index.name = 'game_n'
-        fname = Path(
-            f'df_'
-            f'games-{n_games}_'
-            f'players-{n_players}_'
-            f'mult-{mult}_'
-            f'steal-{"yes" if do_steal else "no"}.csv'
-        )
+        fname = (csv_output_dir /
+                 f'df_games-{n_games}_'
+                 f'players-{n_players}_'
+                 f'mult-{mult}_'
+                 f'steal-{"yes" if do_steal else "no"}.csv')
         for game_n in tqdm(range(n_games)):
             try:
                 data = play_game(
