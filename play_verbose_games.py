@@ -146,26 +146,25 @@ def play_single_game(game_n: int = 1) -> None:
                         if target_score <= dice.score:
                             another_turn = False
 
-                if player.name == 'You':
-                    to_pickup = [f'{k} ({v})' for k, v in tiles.values.items() if k <= dice.score and tiles.is_available(k)]
-                    if any(to_pickup) and dice.free_dice:
-                        print(f'{roll_n}. Has:     ', dice, f'({dice.score}) -> {to_pickup[-1]}')
-                        player_another_turn = not any(input('   Quit?     '))
-                        if player_another_turn != another_turn:
-                            print('   Bot:     ', "Continue!!" if another_turn else "Quit!!")
-                        another_turn = player_another_turn
+                # Cap appeal by the value of dice thrown
+                capped_appeal = appeal[[tile_value <= dice.score for tile_value in map(_strip_s, appeal.index)]]
+
+                if player.name == 'You' and any(capped_appeal) and dice.free_dice:
+                    to_pickup = capped_appeal.index[capped_appeal.eq(capped_appeal.max())].max()
+                    print(f'{roll_n}. Has:     ', dice, f'({dice.score}) -> {to_pickup}')
+                    player_another_turn = not any(input('   Quit?     '))
+                    if player_another_turn != another_turn:
+                        print('   Bot:     ', "Continue!!" if another_turn else "Quit!!")
+                    another_turn = player_another_turn
                 if not another_turn:
                     print('   Done:    ', dice, f'({dice.score})')
                     if player.name != 'You':
                         for kv in {f'             {(str(k) + ":").rjust(4)}     ': f'{v: .3f}' for k, v in appeal.items()}.items(): print(*kv)
 
-                    # Cap appeal by the value of dice thrown
-                    capped_appeal = appeal[[tile_value <= dice.score for tile_value in map(_strip_s, appeal.index)]]
-
                     # If no tile can be picked up with the value of dice thrown, break the turn
                     if not any(capped_appeal):
                         break_turn(game_n, tiles, player)
-                        return
+                        break
 
                     # Get the highest tile with the highest achieved appeal
                     target_score = _strip_s(capped_appeal.index[capped_appeal.eq(capped_appeal.max())].max())
@@ -192,7 +191,6 @@ def play_single_game(game_n: int = 1) -> None:
         for player in players:
             print('            ', player, f'{"+" if player.position > 1 else ""}{player.position}')
         print([f'{p.name} won{"!" if p.name == "You" else "."}' for p in players if p.position > 0][0])
-
     except IndexError:
         print('The game ended in a draw between', ' and '.join([p.name for p in players if p.position == 0]) + '.')
     if any([p.position > 0 for p in players]):
